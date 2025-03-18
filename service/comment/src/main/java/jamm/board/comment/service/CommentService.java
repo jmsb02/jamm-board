@@ -14,9 +14,9 @@ import static java.util.function.Predicate.not;
 @Service
 @RequiredArgsConstructor
 public class CommentService {
+
     private final Snowflake snowflake = new Snowflake();
     private final CommentRepository commentRepository;
-
 
     /**
      * 댓글 생성
@@ -40,6 +40,7 @@ public class CommentService {
 
     }
 
+    //부모 댓글 반환
     private Comment findParent(CommentCreateRequest request) {
         Long parentCommentId = request.getParentCommentId();
         if (parentCommentId == null) {
@@ -60,13 +61,16 @@ public class CommentService {
         );
     }
 
+    /**
+     * 댓글 삭제
+     */
     @Transactional
     public void delete(Long commentId) {
         commentRepository.findById(commentId)
                 .filter(not(Comment::getDeleted)) // 삭제되지 않은 댓글이여야 함.
                 .ifPresent(comment -> { //존재하고
                     if(hasChildren(comment)) { //만약 자식 댓글이 있다면
-                        comment.delete(); //boolean값 deleted를 true로 바꿔줌
+                        comment.delete(); //boolean값 deleted를 true로 바꿔줌 (soft delete)
                     } else {
                         delete(comment); //실제 삭제
                     }
@@ -79,8 +83,11 @@ public class CommentService {
         return commentRepository.countBy(comment.getArticleId(), comment.getCommentId(), 2L) == 2;
     }
 
+    /**
+     * 댓글 삭제
+     */
     private void delete(Comment comment) {
-        commentRepository.delete(comment);
+        commentRepository.delete(comment); //부모댓글을 먼저 제거하고
         if(!comment.isRoot()) { //대댓글일 경우
             commentRepository.findById(comment.getParentCommentId()) //부모 댓글 조회
                     .filter(Comment::getDeleted) //부모 댓글은 이미 삭제된 상태여야 함.
