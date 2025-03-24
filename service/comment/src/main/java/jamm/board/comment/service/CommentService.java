@@ -3,11 +3,14 @@ package jamm.board.comment.service;
 import jamm.board.comment.entity.Comment;
 import jamm.board.comment.repository.CommentRepository;
 import jamm.board.comment.service.request.CommentCreateRequest;
+import jamm.board.comment.service.response.CommentPageResponse;
 import jamm.board.comment.service.response.CommentResponse;
 import kuke.board.common.snowflake.Snowflake;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 import static java.util.function.Predicate.not;
 
@@ -94,6 +97,30 @@ public class CommentService {
                     .filter(not(this::hasChildren)) //부모 댓글은 자식 댓글을 가지고 있지 않아야 함
                     .ifPresent(this::delete); //부모 댓글이 존재하다면 부모댓글도 삭제
         }
+    }
+
+    /**
+     * 댓글 전체 조회 (2 depth 페이지 번호)
+     */
+    public CommentPageResponse readAll(Long articleId, Long page, Long pageSize) {
+        return CommentPageResponse.of(
+                commentRepository.findAll(articleId, (page - 1) * pageSize, pageSize).stream()
+                        .map(CommentResponse::from)
+                        .toList(),
+                commentRepository.count(articleId, PageLimitCalculator.calculatePageLimit(page, pageSize, 10L)) //한 페이지당 10개 댓글 가정
+        );
+    }
+
+    /**
+     * 댓글 전체 조회 (2 depth 무한 스크롤)
+     */
+    public List<CommentResponse> readAll(Long articleId, Long lastParentCommentId, Long lastCommentId, Long limit) {
+        List<Comment> comments = lastParentCommentId == null || lastCommentId == null ?
+                commentRepository.findAllInfiniteScroll(articleId, limit) :
+                commentRepository.findAllInfiniteScroll(articleId, lastParentCommentId, lastCommentId, limit);
+        return comments.stream()
+                .map(CommentResponse::from)
+                .toList();
     }
 
 
